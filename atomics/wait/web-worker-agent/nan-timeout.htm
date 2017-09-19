@@ -10,20 +10,23 @@ Tests Atomics.wait in a web worker.  The worker thread waits on the
 SharedArrayBuffer slot 0 to with a NaN timeout.
 */
 
-test(function(t) {
+window.addEventListener("load", function() {
+  async_test(function(t) {
     var ia = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
     var worker = new Worker("workers/nan-timeout.js");
     window.setTimeout(() => Atomics.wake(ia, 0), 1000);
-    
+
     worker.onerror = function(e) {
       assert_false(true);
     }
-    worker.onmessage = function(e) {
+    worker.onmessage = this.step_func(function(e) {
       let val = e.data[0];
       if (typeof val == "undefined") return;
-      assert_true(val, "ok");
-    }
+      assert_equals(val, "ok");
+      t.done();
+    });
     worker.postMessage([ia]);
+  }, "dedicated-worker-atomics-nan-timeout");
 });
 
 </script>
