@@ -1,0 +1,467 @@
+#!/usr/bin/env python
+
+import os
+import re
+import string
+import subprocess
+import sys
+import tempfile
+import threading
+
+from random import randint
+from stat import *
+
+BROWSER="firefox"
+
+OPTIONS = {
+    "generate": [0, 1]      # Generate WPT tests. Accepts zero or one arguments.
+}
+
+HEADER = '''
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{filename}</title>
+    <meta name="help" href="https://storage.spec.whatwg.org/#dom-storagemanager-persisted">
+    <meta name="author" title="Mozilla" href="https://www.mozilla.org">
+
+    <script src="/resources/testharness.js"></script>
+    <script src="/resources/testharnessreport.js"></script>
+
+    <!-- Test262 harness -->
+    <script src="/resources/test262-harness.js"></script>
+
+    <!-- Test262 required libraries -->
+    <script src="/test262/harness/assert.js"></script>
+    <script src="/test262/harness/sta.js"></script>
+
+    <!-- Per-test required libraries -->
+    {includes}
+
+  </head>
+  <body></body>
+  <script type="text/javascript">
+    window.addEventListener('load', function(e) {
+'''
+
+FOOTER = '''
+    });
+  </script>
+</html>
+'''
+
+def usage():
+    print(
+'''Usage: wpt-262 [--generate] <path-to-test262>
+    --generate      Creates web-platform-test wrappers for test262. Generated tests are placed at js/test262/.
+''')
+    exit(1)
+
+def random_alpha_char():
+    r = randint(0, 2)
+    if r == 0:
+        return str(randint(0, 9))
+    elif r == 1:
+        c = randint(0,25)
+        return string.ascii_lowercase[c]
+    else:
+        c = randint(0,25)
+        return string.ascii_uppercase[c]
+
+def random_alpha_string(len):
+    ret = []
+    for i in range(0, len):
+        ret.append(random_alpha_char())
+    return string.join(ret, '')
+
+def wpt_run(path):
+    def run_in_thread():
+        cmd="./wpt run " + BROWSER + " " + path
+        proc = subprocess.Popen(cmd.split())
+        proc.wait()
+        os.remove(path)
+    thread = threading.Thread(target=run_in_thread)
+    thread.start()
+    return thread
+
+def parse_args():
+    def is_opt(arg):
+        return is_long_opt(arg) or is_short_opt(arg)
+    def is_long_opt(arg):
+        return arg.startswith('--')
+    def is_short_opt(arg):
+        return arg.startswith('-')
+    def check_arguments():
+        argv = sys.argv
+        argc = len(argv)
+        if not (argc == 2 or argc == 3):
+            usage()
+        return [argv, argc]
+    def require(key, n):
+        array = isinstance(OPTIONS[key], (int)) and [OPTIONS[key]] or OPTIONS[key]
+        assert(isinstance(array, (list)))
+        return n in array
+    def parse_opt(argv, i):
+        key = argv[i]
+        if is_long_opt(key):
+            key = key[2:]
+        elif is_short_opt(key):
+            key = key[1:]
+        else:
+            raise ValueError("Invalid option key: '%s'" % key)
+
+        try:
+            OPTIONS[key]
+        except KeyError:
+            print("Not recognized option: '%s'" % key)
+            exit(1)
+
+        # Last argument?
+        if i == len(argv) - 1:
+            if require(key, 0):
+                return [key, True, i+1]
+            else:
+                raise ValueError("Option '%s' requires at least one value" % key)
+
+        # Next argument is an option?
+        val = argv[i+1]
+        if is_opt(val):
+            if require(key, 0):
+                return [key, True, i+1]
+
+        # Next argument is a value.
+        if require(key, 1):
+            return [key, val, i+2]
+        else:
+            raise ValueError("Option '%s' requires more than one value or less" % key)
+
+    argv, argc = check_arguments()
+    opts = {}; args = {}
+    i = 1
+    while i < argc:
+        arg = argv[i]
+        if is_opt(arg):
+            key, value, i = parse_opt(argv, i)
+            opts[key] = value
+        else:
+            args.append(arg)
+            i = i+1
+    return [opts, args]
+
+'''
+    def pp(self, text):
+        # Skip blank lines at the beginning.
+        match = re.search("[^\s]+", text)
+        if match:
+            text = text[match.start(0):]
+
+        # Indent one level deep.
+        indent = "   "
+        ret = []
+        for line in text.split("\n"):
+            ret.append(indent + line)
+        return "\n".join(ret)
+'''
+
+###
+
+RUN_IN_IFRAME_TEMPLATE = '''
+function test262() {
+	return `
+    {jscode}
+	`;
+}
+function test262_as_html() {
+    let output = [];
+    output.push(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title></title>
+
+            <!-- Test262 harness -->
+            <script src="/resources/test262-harness.js"><\/script>
+
+            <!-- Test262 required libraries -->
+            <script src="/test262/harness/assert.js"><\/script>
+            <script src="/test262/harness/sta.js"><\/script>
+
+            <!-- Per-test required libraries -->
+			{includes}
+        </head>
+        <body>
+        </body>
+        <script type="text/javascript">
+    `);
+    output.push(test262());
+    output.push(`
+        <\/script>
+        </html>
+    `);
+    return output.join("");
+}
+function run_in_iframe() {
+    let iframe = document.createElement('iframe');
+    iframe.style = 'display: none';
+    blob = new Blob([test262_as_html()], {type: 'text/html'});
+    URL.createObjectURL(blob);
+    document.body.appendChild(iframe);
+}
+'''
+
+# Wraps a Test262 test into an HTML ready to be embed in an iframe.
+class Test262Wrapper(object):
+
+    def __init__(self, text):
+        match = re.search('---\*/', text)
+        if match:
+            header = text[:match.end(0)]
+            body = text[match.end(0)+1:]
+        else:
+            header = ""
+            body = text
+        self.attrs = {}
+        self.parse_header(header)
+        self.header = header
+        self.body = self.escape_body(body)
+
+    def parse_header(self, header):
+        if len(header) == 0:
+            return
+        value = []
+        last_attr = None
+        for line in header.split('\n'):
+            # End of the attribute section?
+            if re.search(r'---\*/', line):
+                self.store_attribute(last_attr, "\n".join(value))
+                break
+
+            # Attribute? (attr: <text>)
+            match = re.search(r'^(\w+):', line)
+            if match:
+                attr = match.group(1)
+                # Name of attribute changed?
+                if attr != last_attr:
+                    # Should store attribute?
+                    if last_attr is not None:
+                        self.store_attribute(last_attr, "\n".join(value))
+                    match = re.search(': (.*)\n?', line)
+                    if match:
+                        value = [match.group(1)]
+                    else:
+                        value = []
+                    last_attr = attr
+            else:
+                value.append(line)
+        self.store_attribute(last_attr, "\n".join(value))
+
+    def store_attribute(self, name, value):
+        if name in ['includes', 'flags']:
+            self.attrs[name] = self.parse_list(value)
+        else:
+            self.attrs[name] = value
+
+    '''
+    There are two ways of describing a list of properties:
+       attr: [prop1, prop2, ..., propn]
+       attr:
+         - prop1
+         - prop2
+         - ...
+         - propn
+    '''
+    def parse_list(self, text):
+        match = re.search("\[", text)
+        if match:
+            return re.findall("[^\[, \]\n]+", text)
+        else:
+            return re.findall("[^- \n]+", text)
+
+    def escape_body(self, body):
+        # body = re.sub("\\", "\\\\", body)
+        body = re.sub("`", "\`", body)
+        body = re.sub("\$\{", "\\${", body)
+        return body
+
+    def build(self):
+        text = RUN_IN_IFRAME_TEMPLATE
+        if 'includes' in self.attrs:
+            includes = []
+            for each in self.attrs['includes']:
+                includes.append('<script src="/test262/harness/{0}"><\/script>'.format(each))
+            text = re.sub('{includes}', "\n".join(includes), text)
+        else:
+            text = re.sub('{includes}', '', text)
+        return text.replace('{jscode}', self.body)
+        # return re.sub('{jscode}', self.body, text)
+
+###
+
+HEADER = '''
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{title}</title>
+    <meta name="help" href="https://storage.spec.whatwg.org/#dom-storagemanager-persisted">
+    <meta name="author" title="Mozilla" href="https://www.mozilla.org">
+
+    <script src="/resources/testharness.js"></script>
+    <script src="/resources/testharnessreport.js"></script>
+  </head>
+  <body></body>
+  <script type="text/javascript">
+    window.addEventListener('load', function(e) {
+'''
+
+BODY = '''
+        test(function() {
+            run_in_iframe();
+        }, '{title}');
+'''
+
+FOOTER = '''
+    });
+  </script>
+</html>
+'''
+
+TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{title}</title>
+    <meta name="help" href="https://storage.spec.whatwg.org/#dom-storagemanager-persisted">
+    <meta name="author" title="Mozilla" href="https://www.mozilla.org">
+
+    <script src="/resources/testharness.js"></script>
+    <script src="/resources/testharnessreport.js"></script>
+    <script src="/resources/test262-harness.js"></script>
+
+  </head>
+  <body></body>
+  <script type="text/javascript">
+    let includes = {includes};
+    {test262_header}
+    function test262() {
+      return `
+        {test262_body}
+      `;
+    }
+    window.addEventListener('load', function(e) {
+      async_test(function(t) {
+        run_in_iframe(test262, includes, t);
+      }, 'IFrame: {title}');
+    });
+  </script>
+</html>
+'''
+
+class WPTestBuilder(object):
+
+    def __init__(self, path):
+        self.path = path
+
+    def generate(self):
+        path = self.path
+        mode = os.stat(path)[ST_MODE]
+        if S_ISDIR(mode):
+            print "Generating WPT wrapper for test262"
+            for path in self.listall(path, {'ext': 'js', 'skip_hidden': True}):
+                self.generate_single_wpt(path)
+            print "Output: js/test262"
+        elif S_ISREG(mode):
+            print "Generating WPT wrapper for {0}".format(path)
+            dst = self.generate_single_wpt(path)
+            print "Output: %s" % dst
+        else:
+            print "Skipping %s" % path
+
+    def generate_single_wpt(self, path):
+        output = self.ensure_destination_path(path)
+        return self.savefile(output, self.build(output, self.readfile(path)))
+
+    def savefile(self, output, content):
+        with open(output, 'wt') as fd:
+            fd.write(content)
+            return fd.name
+
+    '''
+    def build(self, title, content):
+        ret = []
+        def header():
+           return HEADER.replace('{title}', title)
+        def body():
+            ret = []
+            ret.append(Test262Wrapper(content).build())
+            ret.append(BODY.replace('{title}', title))
+            return "\n".join(ret)
+        def footer():
+           return FOOTER
+        ret.append(header())
+        ret.append(body())
+        ret.append(footer())
+        return "\n".join(ret)
+    '''
+
+    def build(self, title, content):
+        test262 = Test262Wrapper(content)
+        def includes(test262):
+            if 'includes' in test262.attrs:
+                includes = attrs['includes']
+                if includes != None:
+                    ret = []
+                    for i in range(0, len(includes)-1):
+                        ret.append("'%s'" % includes[i])
+                    return '[' + ",".join(ret) + ']'
+            return '[]'
+
+        output = TEMPLATE
+        output = re.sub('{title}', title, output)
+        output = re.sub('{includes}', includes(test262), output);
+        output = re.sub('{test262_body}', test262.body, output)
+        output = re.sub('{test262_header}', test262.header, output)
+        return output
+
+    def readfile(self, path):
+        with open(path) as fd:
+            return fd.read()
+
+    def ensure_destination_path(self, path):
+        dirname = subprocess.check_output(("dirname {0}".format(path)).split())
+        dirname = re.sub('\n', '', dirname)
+        subprocess.Popen(("mkdir -p js/{0}".format(dirname)).split())
+        return 'js/%s' % (re.sub('.js$', '.html', path))
+
+    def listall(self, root, opts):
+        opts = opts or {}
+        result = []
+        def ls(path):
+            return os.listdir(path)
+        def lsr(path):
+            if not os.path.isdir(path):
+                if not opts['ext'] or path.endswith(opts.ext):
+                    result.append(path)
+            for f in ls(path):
+                if opts['skip_hidden'] and f.startswith('.'):
+                    continue
+                filename = os.path.join(path, f)
+                if os.path.isdir(filename):
+                    lsr(filename)
+                else:
+                    result.append(filename)
+        lsr(root)
+        return result
+
+def main():
+    opts, args = parse_args()
+    if opts['generate']:
+        val = opts['generate']
+        path = isinstance(val, (bool)) and 'test262/test' or val
+        WPTestBuilder(path).generate()
+
+if __name__ == "__main__":
+    main()
