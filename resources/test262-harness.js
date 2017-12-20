@@ -33,7 +33,7 @@ function installAPI(global) {
     return global.$262;
 }
 
-function run_in_iframe(test262, includes, t) {
+function run_in_iframe(test262, attrs, t) {
   // Rethrow error from iframe.
   window.addEventListener('message', t.step_func(function(e) {
     if (e.data[0] == 'error') {
@@ -42,7 +42,7 @@ function run_in_iframe(test262, includes, t) {
   }));
   let iframe = document.createElement('iframe');
   iframe.style = 'display: none';
-  content = test262_as_html(test262, includes);
+  content = test262_as_html(test262, attrs);
   let blob = new Blob([content], {type: 'text/html'});
   iframe.src = URL.createObjectURL(blob);
   document.body.appendChild(iframe);
@@ -59,7 +59,7 @@ function run_in_iframe(test262, includes, t) {
   });
 }
 
-function test262_as_html(test262, includes) {
+function test262_as_html(test262, attrs) {
   let content = `
     <!DOCTYPE html>
     <html lang="en">
@@ -83,12 +83,18 @@ function test262_as_html(test262, includes) {
       ;__completed__(window);
     <\/script>
     </html>
-  `.replace('###JSTEST###', test262())
-   .replace('###INCLUDES###', addScripts(includes));
+  `;
+  if (attrs.type == 'SyntaxError') {
+      content = content.replace('###JSTEST###', "try { eval(\"###JSCODE###\"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }");
+  }
+  content = content.replace('###JSTEST###', test262())
+    .replace('###INCLUDES###', addScripts(attrs.includes));
+  console.log(content);
   return content;
 }
 
 function addScripts(sources) {
+  sources = sources || [];
   let ret = [];
   let root = 'http://localhost:8000/test262/harness/'
   sources.forEach(function(src) {
