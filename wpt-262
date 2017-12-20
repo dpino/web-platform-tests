@@ -225,7 +225,8 @@ class Test262Wrapper(object):
         self.attrs = {}
         self.parse_header(header)
         self.header = header
-        self.body = self.escape_body(body)
+        self.body = body
+        # self.body = self.escape_body(body)
 
     def parse_header(self, header):
         if len(header) == 0:
@@ -280,9 +281,7 @@ class Test262Wrapper(object):
             return re.findall("[^- \n]+", text)
 
     def escape_body(self, body):
-        # body = re.sub("\\", "\\\\", body)
-        body = re.sub("`", "\`", body)
-        body = re.sub("\$\{", "\\${", body)
+        body = re.sub(r'"', r'\"', body)
         return body
 
     def build(self):
@@ -299,36 +298,8 @@ class Test262Wrapper(object):
 
 ###
 
+# TODO: Put everything into one single template.
 HEADER = '''
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>{title}</title>
-    <meta name="help" href="https://storage.spec.whatwg.org/#dom-storagemanager-persisted">
-    <meta name="author" title="Mozilla" href="https://www.mozilla.org">
-
-    <script src="/resources/testharness.js"></script>
-    <script src="/resources/testharnessreport.js"></script>
-  </head>
-  <body></body>
-  <script type="text/javascript">
-    window.addEventListener('load', function(e) {
-'''
-
-BODY = '''
-        test(function() {
-            run_in_iframe();
-        }, '{title}');
-'''
-
-FOOTER = '''
-    });
-  </script>
-</html>
-'''
-
-TEMPLATE = '''
 <!DOCTYPE html>
 <html>
   <head>
@@ -342,14 +313,14 @@ TEMPLATE = '''
     <script src="/resources/test262-harness.js"></script>
 
   </head>
-  <body></body>
+  <body>
+  </body>
   <script type="text/javascript">
+###HEADER###
     let includes = ###INCLUDES###;
-    ###HEADER###
     function test262() {
-      return `
-        ###BODY###
-      `;
+'''
+FOOTER = '''
     }
     window.addEventListener('load', function(e) {
       async_test(function(t) {
@@ -389,23 +360,6 @@ class WPTestBuilder(object):
             fd.write(content)
             return fd.name
 
-    '''
-    def build(self, title, content):
-        ret = []
-        def header():
-           return HEADER.replace('{title}', title)
-        def body():
-            ret = []
-            ret.append(Test262Wrapper(content).build())
-            ret.append(BODY.replace('{title}', title))
-            return "\n".join(ret)
-        def footer():
-           return FOOTER
-        ret.append(header())
-        ret.append(body())
-        ret.append(footer())
-        return "\n".join(ret)
-    '''
     def stringify(self, list):
         if list == None or len(list) == 0:
             return '[]'
@@ -416,14 +370,39 @@ class WPTestBuilder(object):
         return '[%s]' % ",".join(ret)
 
     def build(self, title, content):
-        output = TEMPLATE
-        output = re.sub('###TITLE###', title, output)
         test262 = Test262Wrapper(content)
-        includes = test262.attrs.get('includes', [])
-        output = output.replace('###INCLUDES###', self.stringify(includes))
-        output = output.replace('###BODY###', test262.body)
-        output = output.replace('###HEADER###', test262.header)
-        return output
+        def header():
+            ret = HEADER
+            ret = re.sub('###TITLE###', title, ret)
+            includes = test262.attrs.get('includes', [])
+            ret = ret.replace('###INCLUDES###', self.stringify(includes))
+            ret = ret.replace('###HEADER###', test262.header)
+            return ret
+        def body():
+			def escape(text):
+				text = re.sub(r'\\', r'\\\\', text)
+				text = re.sub(r'"', r'\"', text)
+				return text
+			def quote(line):
+				return "\"" + line + "\\n\""
+			def format(text):
+				output = []
+				lines = text.split("\n");
+				for line in text.split("\n"):
+					if len(line) > 0:
+						output.append(quote(line))
+				return " + \n".join(output)
+			return "return " + format(escape(test262.body)) + ";"
+        def footer():
+            ret = FOOTER
+            ret = re.sub('###TITLE###', title, ret)
+            return ret
+
+        ret = []
+        ret.append(header())
+        ret.append(body())
+        ret.append(footer())
+        return "\n".join(ret)
 
     def readfile(self, path):
         with open(path) as fd:
