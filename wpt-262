@@ -240,14 +240,14 @@ class Test262Wrapper(object):
                 break
 
             # Attribute? (attr: <text>)
-            match = re.search(r'^(\w+):', line)
+            match = re.search(r'^\s*(\w+):', line)
             if match:
                 attr = match.group(1)
                 # Name of attribute changed?
                 if attr != last_attr:
                     # Should store attribute?
                     if last_attr is not None:
-                        self.store_attribute(last_attr, "\n".join(value))
+                        self.store_attribute(last_attr, "".join(value))
                     match = re.search(': (.*)\n?', line)
                     if match:
                         value = [match.group(1)]
@@ -256,10 +256,10 @@ class Test262Wrapper(object):
                     last_attr = attr
             else:
                 value.append(line)
-        self.store_attribute(last_attr, "\n".join(value))
+        self.store_attribute(last_attr, "".join(value))
 
     def store_attribute(self, name, value):
-        if name in ['includes', 'flags']:
+        if name in ['includes', 'flags', 'features']:
             self.attrs[name] = self.parse_list(value)
         else:
             self.attrs[name] = value
@@ -317,19 +317,55 @@ HEADER = '''
   </body>
   <script type="text/javascript">
 ###HEADER###
-    let includes = ###INCLUDES###;
+    let attrs = ###ATTRS###;
     function test262() {
 '''
 FOOTER = '''
     }
     window.addEventListener('load', function(e) {
       async_test(function(t) {
-        run_in_iframe(test262, includes, t);
+        run_in_iframe(test262, attrs, t);
       }, 'IFrame: ###TITLE###');
     });
   </script>
 </html>
 '''
+
+def stringify(list):
+    if list == None or len(list) == 0:
+        return '[]'
+    ret = []
+    for i in range(0, len(list)):
+        elem = "'" + str(list[i]) + "'"
+        ret.append(elem)
+    return '[%s]' % ",".join(ret)
+
+def tojson(d):
+    ret = []
+    def append(string):
+        ret.append(string)
+    def flush():
+        return "\n".join(ret)
+    def quote(v):
+        if isinstance(v, str):
+            if len(v) == 0:
+                return "''"
+            first, last = [v[0], v[len(v)-1]]
+            if first == "'" and last == "'":
+                return v
+            if first == '"' and last == '"':
+                return v
+        return "'%s'" % str(v)
+    def escape(v):
+        return re.sub(r"'", r"\'", v)
+    append('{')
+    for k, v in d.iteritems():
+        if isinstance(v, list):
+            append("\t{key}: {value},".format(key=k, value=stringify(v)))
+        else:
+            append("\t{key}: {value},".format(key=k, value=quote(escape(v))))
+    append('}')
+    return flush()
 
 class WPTestBuilder(object):
 
@@ -360,22 +396,12 @@ class WPTestBuilder(object):
             fd.write(content)
             return fd.name
 
-    def stringify(self, list):
-        if list == None or len(list) == 0:
-            return '[]'
-        ret = []
-        for i in range(0, len(list)):
-            elem = "'" + str(list[i]) + "'"
-            ret.append(elem)
-        return '[%s]' % ",".join(ret)
-
     def build(self, title, content):
         test262 = Test262Wrapper(content)
         def header():
             ret = HEADER
             ret = re.sub('###TITLE###', title, ret)
-            includes = test262.attrs.get('includes', [])
-            ret = ret.replace('###INCLUDES###', self.stringify(includes))
+            ret = ret.replace('###ATTRS###', tojson(test262.attrs))
             ret = ret.replace('###HEADER###', test262.header)
             return ret
         def body():
