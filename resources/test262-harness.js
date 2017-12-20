@@ -19,7 +19,6 @@ function installAPI(global) {
 				throw new Error('No method available to detach an ArrayBuffer');
 			} else {
 				let dst = ArrayBuffer.transfer(buffer, buffer.byteLength);
-                console.log(dst);
 				postMessage(null, '*', [dst]);
 				/*
 				  See https://html.spec.whatwg.org/multipage/comms.html#dom-window-postmessage
@@ -86,7 +85,6 @@ function test262_as_html(test262, includes) {
     </html>
   `.replace('###JSTEST###', test262())
    .replace('###INCLUDES###', addScripts(includes));
-  console.log(content);
   return content;
 }
 
