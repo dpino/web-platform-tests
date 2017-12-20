@@ -61,7 +61,7 @@ function run_in_iframe(test262, includes, t) {
 }
 
 function test262_as_html(test262, includes) {
-  return `
+  let content = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -75,23 +75,26 @@ function test262_as_html(test262, includes) {
       <script src="http://localhost:8000/test262/harness/assert.js"><\/script>
       <script src="http://localhost:8000/test262/harness/sta.js"><\/script>
 
-      ###includes###
+      ###INCLUDES###
     </head>
     <body>
     </body>
     <script type="text/javascript">
-      ###jstest###
+      ###JSTEST###
       ;__completed__(window);
     <\/script>
     </html>
-  `.replace('###jstest###', test262())
-   .replace('###includes###', addScripts(includes));
+  `.replace('###JSTEST###', test262())
+   .replace('###INCLUDES###', addScripts(includes));
+  console.log(content);
+  return content;
 }
 
 function addScripts(sources) {
   let ret = [];
+  let root = 'http://localhost:8000/test262/harness/'
   sources.forEach(function(src) {
-    ret.push("<script src='http://localhost:8000{src}'><\/script>".replace('{src}', src));
+    ret.push("<script src='###SRC###'><\/script>".replace('###SRC###', root + src));
   });
   return ret.join("\n");
 }

@@ -333,7 +333,7 @@ TEMPLATE = '''
 <html>
   <head>
     <meta charset="utf-8">
-    <title>{title}</title>
+    <title>###TITLE###</title>
     <meta name="help" href="https://storage.spec.whatwg.org/#dom-storagemanager-persisted">
     <meta name="author" title="Mozilla" href="https://www.mozilla.org">
 
@@ -344,17 +344,17 @@ TEMPLATE = '''
   </head>
   <body></body>
   <script type="text/javascript">
-    let includes = {includes};
-    {test262_header}
+    let includes = ###INCLUDES###;
+    ###HEADER###
     function test262() {
       return `
-        {test262_body}
+        ###BODY###
       `;
     }
     window.addEventListener('load', function(e) {
       async_test(function(t) {
         run_in_iframe(test262, includes, t);
-      }, 'IFrame: {title}');
+      }, 'IFrame: ###TITLE###');
     });
   </script>
 </html>
@@ -406,24 +406,23 @@ class WPTestBuilder(object):
         ret.append(footer())
         return "\n".join(ret)
     '''
+    def stringify(self, list):
+        if list == None or len(list) == 0:
+            return '[]'
+        ret = []
+        for i in range(0, len(list)):
+            elem = "'" + str(list[i]) + "'"
+            ret.append(elem)
+        return '[%s]' % ",".join(ret)
 
     def build(self, title, content):
-        test262 = Test262Wrapper(content)
-        def includes(test262):
-            if 'includes' in test262.attrs:
-                includes = attrs['includes']
-                if includes != None:
-                    ret = []
-                    for i in range(0, len(includes)-1):
-                        ret.append("'%s'" % includes[i])
-                    return '[' + ",".join(ret) + ']'
-            return '[]'
-
         output = TEMPLATE
-        output = re.sub('{title}', title, output)
-        output = re.sub('{includes}', includes(test262), output);
-        output = re.sub('{test262_body}', test262.body, output)
-        output = re.sub('{test262_header}', test262.header, output)
+        output = re.sub('###TITLE###', title, output)
+        test262 = Test262Wrapper(content)
+        includes = test262.attrs.get('includes', [])
+        output = output.replace('###INCLUDES###', self.stringify(includes))
+        output = output.replace('###BODY###', test262.body)
+        output = output.replace('###HEADER###', test262.header)
         return output
 
     def readfile(self, path):
