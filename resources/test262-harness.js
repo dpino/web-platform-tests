@@ -60,7 +60,10 @@ function run_in_iframe(test262, attrs, t) {
 }
 
 function test262_as_html(test262, attrs) {
-  let content = `
+  function escapeDoubleQuotes(str) {
+    return str.replace(/\"/g, '\\\"');
+  }
+  let header = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -79,18 +82,25 @@ function test262_as_html(test262, attrs) {
     <body>
     </body>
     <script type="text/javascript">
-      ###JSTEST###
+  `;
+  let footer = `
       ;__completed__(window);
     <\/script>
     </html>
   `;
+  output = [];
+  output.push(header.replace('###INCLUDES###', addScripts(attrs.includes)));
   if (attrs.type == 'SyntaxError') {
-      content = content.replace('###JSTEST###', "try { eval(\"###JSCODE###\"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }");
+      output.push('try { eval("');
+      output.push(escapeDoubleQuotes(test262()));
+      output.push('"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
+  } else {
+      output.push(test262());
   }
-  content = content.replace('###JSTEST###', test262())
-    .replace('###INCLUDES###', addScripts(attrs.includes));
-  console.log(content);
-  return content;
+  output.push(footer);
+  ret = output.join("");
+  console.log(ret);
+  return ret;
 }
 
 function addScripts(sources) {
