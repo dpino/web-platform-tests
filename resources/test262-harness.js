@@ -18,8 +18,7 @@ function installAPI(global) {
 			if (typeof postMessage !== 'function') {
 				throw new Error('No method available to detach an ArrayBuffer');
 			} else {
-				let dst = ArrayBuffer.transfer(buffer, buffer.byteLength);
-				postMessage(null, '*', [dst]);
+                postMessage(null, '*', [buffer]);
 				/*
 				  See https://html.spec.whatwg.org/multipage/comms.html#dom-window-postmessage
 				  which calls https://html.spec.whatwg.org/multipage/infrastructure.html#structuredclonewithtransfer
