@@ -32,6 +32,11 @@ function installAPI(global) {
     return global.$262;
 }
 
+// TODO: $DONE is used by Promise tests and others, but I don't know from where to fetch it.
+function $DONE() {
+
+}
+
 function run_in_iframe(test262, attrs, t) {
   // Rethrow error from iframe.
   window.addEventListener('message', t.step_func(function(e) {
