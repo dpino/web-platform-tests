@@ -398,6 +398,8 @@ class WPTestBuilder(object):
 
     def build(self, title, content):
         test262 = Test262Wrapper(content)
+        def isStrict():
+            return 'flags' in test262.attrs and 'onlyStrict' in test262.attrs['flags']
         def header():
             ret = HEADER
             ret = re.sub('###TITLE###', title, ret)
@@ -405,20 +407,22 @@ class WPTestBuilder(object):
             ret = ret.replace('###HEADER###', test262.header)
             return ret
         def body():
-			def escape(text):
-				text = re.sub(r'\\', r'\\\\', text)
-				text = re.sub(r'"', r'\"', text)
-				return text
-			def quote(line):
-				return "\"" + line + "\\n\""
-			def format(text):
-				output = []
-				lines = text.split("\n");
-				for line in text.split("\n"):
-					if len(line) > 0:
-						output.append(quote(line))
-				return " + \n".join(output)
-			return "return " + format(escape(test262.body)) + ";"
+            def escape(text):
+                text = re.sub(r'\\', r'\\\\', text)
+                text = re.sub(r'"', r'\"', text)
+                return text
+            def quote(line):
+                return "\"" + line + "\\n\""
+            def format(text):
+                output = []
+                lines = text.split("\n");
+                for line in text.split("\n"):
+                    if len(line) > 0:
+                        output.append(quote(line))
+                return " + \n".join(output)
+            if isStrict():
+                test262.body = "'use strict';\n" + test262.body
+            return "return " + format(escape(test262.body)) + ";"
         def footer():
             ret = FOOTER
             ret = re.sub('###TITLE###', title, ret)
@@ -432,7 +436,9 @@ class WPTestBuilder(object):
 
     def readfile(self, path):
         with open(path) as fd:
-            return fd.read()
+            content = fd.read()
+            # Remove carriage return if any.
+            return re.sub("\x0D", "", content)
 
     def ensure_destination_path(self, path):
         dirname = subprocess.check_output(("dirname {0}".format(path)).split())
