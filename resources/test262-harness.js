@@ -95,9 +95,19 @@ function test262_as_html(test262, attrs) {
   output = [];
   output.push(header.replace('###INCLUDES###', addScripts(attrs.includes)));
   if (attrs.type == 'SyntaxError') {
-      output.push('try { eval("');
-      output.push(escapeDoubleQuotes(test262()));
-      output.push('"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
+      if (attrs.phase == 'early') {
+        output.push(`
+            try {
+                throw "Test262: This statement should not be evaluated.";
+            } catch (e) {
+                assert.sameValue(e, "Test262: This statement should not be evaluated.");
+            }
+        `);
+      } else {
+          output.push('try { eval("');
+          output.push(escapeDoubleQuotes(test262()));
+          output.push('"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
+      }
   } else {
       output.push(test262());
   }
