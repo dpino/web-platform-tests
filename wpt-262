@@ -443,7 +443,8 @@ class WPTestBuilder(object):
     def ensure_destination_path(self, path):
         dirname = subprocess.check_output(("dirname {0}".format(path)).split())
         dirname = re.sub('\n', '', dirname)
-        subprocess.Popen(("mkdir -p js/{0}".format(dirname)).split())
+        process = subprocess.Popen(("mkdir -p js/{0}".format(dirname)).split())
+        process.wait() 
         return 'js/%s' % (re.sub('.js$', '.html', path))
 
     def listall(self, root, opts):
