@@ -253,7 +253,7 @@ class WPTestBuilder(object):
             print "Generating WPT wrapper for test262"
             for each in self.listall(path, {'ext': 'js', 'skip_hidden': True}):
                 self.generate_single_wpt(each)
-            print "Output: %s" % path
+            print "Output: js/%s" % path
         elif S_ISREG(mode):
             print "Generating WPT wrapper for {0}".format(path)
             dst = self.generate_single_wpt(path)
