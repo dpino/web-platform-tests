@@ -235,9 +235,9 @@ class WPTestBuilder(object):
         mode = os.stat(path)[ST_MODE]
         if S_ISDIR(mode):
             print "Generating WPT wrapper for test262"
-            for path in self.listall(path, {'ext': 'js', 'skip_hidden': True}):
-                self.generate_single_wpt(path)
-            print "Output: js/test262"
+            for each in self.listall(path, {'ext': 'js', 'skip_hidden': True}):
+                self.generate_single_wpt(each)
+            print "Output: %s" % path
         elif S_ISREG(mode):
             print "Generating WPT wrapper for {0}".format(path)
             dst = self.generate_single_wpt(path)
