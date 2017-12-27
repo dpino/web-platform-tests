@@ -11,45 +11,9 @@ import threading
 from random import randint
 from stat import *
 
-BROWSER="firefox"
-
 OPTIONS = {
     "generate": [0, 1]      # Generate WPT tests. Accepts zero or one arguments.
 }
-
-HEADER = '''
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>{filename}</title>
-    <meta name="help" href="https://storage.spec.whatwg.org/#dom-storagemanager-persisted">
-    <meta name="author" title="Mozilla" href="https://www.mozilla.org">
-
-    <script src="/resources/testharness.js"></script>
-    <script src="/resources/testharnessreport.js"></script>
-
-    <!-- Test262 harness -->
-    <script src="/resources/test262-harness.js"></script>
-
-    <!-- Test262 required libraries -->
-    <script src="/test262/harness/assert.js"></script>
-    <script src="/test262/harness/sta.js"></script>
-
-    <!-- Per-test required libraries -->
-    {includes}
-
-  </head>
-  <body></body>
-  <script type="text/javascript">
-    window.addEventListener('load', function(e) {
-'''
-
-FOOTER = '''
-    });
-  </script>
-</html>
-'''
 
 def usage():
     print(
@@ -57,33 +21,6 @@ def usage():
     --generate      Creates web-platform-test wrappers for test262. Generated tests are placed at js/test262/.
 ''')
     exit(1)
-
-def random_alpha_char():
-    r = randint(0, 2)
-    if r == 0:
-        return str(randint(0, 9))
-    elif r == 1:
-        c = randint(0,25)
-        return string.ascii_lowercase[c]
-    else:
-        c = randint(0,25)
-        return string.ascii_uppercase[c]
-
-def random_alpha_string(len):
-    ret = []
-    for i in range(0, len):
-        ret.append(random_alpha_char())
-    return string.join(ret, '')
-
-def wpt_run(path):
-    def run_in_thread():
-        cmd="./wpt run " + BROWSER + " " + path
-        proc = subprocess.Popen(cmd.split())
-        proc.wait()
-        os.remove(path)
-    thread = threading.Thread(target=run_in_thread)
-    thread.start()
-    return thread
 
 def parse_args():
     def is_opt(arg):
@@ -149,91 +86,28 @@ def parse_args():
             i = i+1
     return [opts, args]
 
-'''
-    def pp(self, text):
-        # Skip blank lines at the beginning.
-        match = re.search("[^\s]+", text)
-        if match:
-            text = text[match.start(0):]
-
-        # Indent one level deep.
-        indent = "   "
-        ret = []
-        for line in text.split("\n"):
-            ret.append(indent + line)
-        return "\n".join(ret)
-'''
-
 ###
 
-RUN_IN_IFRAME_TEMPLATE = '''
-function test262() {
-	return `
-    {jscode}
-	`;
-}
-function test262_as_html() {
-    let output = [];
-    output.push(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title></title>
-
-            <!-- Test262 harness -->
-            <script src="/resources/test262-harness.js"><\/script>
-
-            <!-- Test262 required libraries -->
-            <script src="/test262/harness/assert.js"><\/script>
-            <script src="/test262/harness/sta.js"><\/script>
-
-            <!-- Per-test required libraries -->
-			{includes}
-        </head>
-        <body>
-        </body>
-        <script type="text/javascript">
-    `);
-    output.push(test262());
-    output.push(`
-        <\/script>
-        </html>
-    `);
-    return output.join("");
-}
-function run_in_iframe() {
-    let iframe = document.createElement('iframe');
-    iframe.style = 'display: none';
-    blob = new Blob([test262_as_html()], {type: 'text/html'});
-    URL.createObjectURL(blob);
-    document.body.appendChild(iframe);
-}
-'''
-
-# Wraps a Test262 test into an HTML ready to be embed in an iframe.
-class Test262Wrapper(object):
+# Parses a Test262 test. 
+class Test262Parser(object):
 
     def __init__(self, text):
         match = re.search('---\*/', text)
         if match:
-            header = text[:match.end(0)]
-            body = text[match.end(0)+1:]
+            self.header = text[:match.end(0)]
+            self.body = text[match.end(0)+1:]
         else:
-            header = ""
-            body = text
+            self.header = ""
+            self.body = text
         self.attrs = {}
-        self.parse_header(header)
-        self.header = header
-        self.body = body
-        # self.body = self.escape_body(body)
+        self.parse_header()
 
-    def parse_header(self, header):
-        if len(header) == 0:
+    def parse_header(self):
+        if len(self.header) == 0:
             return
         value = []
         last_attr = None
-        for line in header.split('\n'):
+        for line in self.header.split('\n'):
             # End of the attribute section?
             if re.search(r'---\*/', line):
                 self.store_attribute(last_attr, "\n".join(value))
@@ -279,22 +153,6 @@ class Test262Wrapper(object):
             return re.findall("[^\[, \]\n]+", text)
         else:
             return re.findall("[^- \n]+", text)
-
-    def escape_body(self, body):
-        body = re.sub(r'"', r'\"', body)
-        return body
-
-    def build(self):
-        text = RUN_IN_IFRAME_TEMPLATE
-        if 'includes' in self.attrs:
-            includes = []
-            for each in self.attrs['includes']:
-                includes.append('<script src="/test262/harness/{0}"><\/script>'.format(each))
-            text = re.sub('{includes}', "\n".join(includes), text)
-        else:
-            text = re.sub('{includes}', '', text)
-        return text.replace('{jscode}', self.body)
-        # return re.sub('{jscode}', self.body, text)
 
 ###
 
@@ -397,7 +255,7 @@ class WPTestBuilder(object):
             return fd.name
 
     def build(self, title, content):
-        test262 = Test262Wrapper(content)
+        test262 = Test262Parser(content)
         def isStrict():
             return 'flags' in test262.attrs and 'onlyStrict' in test262.attrs['flags']
         def header():
