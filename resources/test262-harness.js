@@ -37,6 +37,11 @@ function $DONE() {
 
 }
 
+function run_in_iframe_strict(test262, attrs, t) {
+    attrs.strict = true;
+    run_in_iframe(test262, attrs, t);
+}
+
 function run_in_iframe(test262, attrs, t) {
   // Rethrow error from iframe.
   window.addEventListener('message', t.step_func(function(e) {
@@ -102,14 +107,18 @@ function test262_as_html(test262, attrs) {
   `;
   output = [];
   output.push(header.replace('###INCLUDES###', addScripts(attrs.includes)));
+  let test = test262();
+  if (attrs.strict) {
+    test = "'use strict';\n" + test;
+  }
   if (attrs.type == 'SyntaxError') {
       // If phase is 'runtime' the error will be caught here. If phase is 'early' the
       // error will be handled at the window.onerror event.
       output.push('try { eval("');
-      output.push(escapeDoubleQuotes(test262()));
+      output.push(escapeDoubleQuotes(test));
       output.push('"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
   } else {
-      output.push(test262());
+      output.push(test);
   }
   output.push(footer);
   ret = output.join("");
