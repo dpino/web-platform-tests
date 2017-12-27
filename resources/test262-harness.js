@@ -59,6 +59,14 @@ function run_in_iframe(test262, attrs, t) {
   // In case of error send it to parent window.
   w.addEventListener('error', function(e) { 
     e.preventDefault();
+    // If the test failed due to a SyntaxError but phase was 'early', then the
+    // test should actually pass.
+    if (e.message.startsWith("SyntaxError")) {
+        if (attrs.type == 'SyntaxError' && attrs.phase == 'early') {
+            t.done();
+            return;
+        }
+    }
     w.top.postMessage(['error', e.message], '*');
   });
 }
@@ -95,19 +103,11 @@ function test262_as_html(test262, attrs) {
   output = [];
   output.push(header.replace('###INCLUDES###', addScripts(attrs.includes)));
   if (attrs.type == 'SyntaxError') {
-      if (attrs.phase == 'early') {
-        output.push(`
-            try {
-                throw "Test262: This statement should not be evaluated.";
-            } catch (e) {
-                assert.sameValue(e, "Test262: This statement should not be evaluated.");
-            }
-        `);
-      } else {
-          output.push('try { eval("');
-          output.push(escapeDoubleQuotes(test262()));
-          output.push('"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
-      }
+      // If phase is 'runtime' the error will be caught here. If phase is 'early' the
+      // error will be handled at the window.onerror event.
+      output.push('try { eval("');
+      output.push(escapeDoubleQuotes(test262()));
+      output.push('"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
   } else {
       output.push(test262());
   }
