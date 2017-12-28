@@ -76,37 +76,55 @@ function run_in_iframe(test262, attrs, t) {
   });
 }
 
+let HEADER = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title></title>
+
+  <!-- Test262 harness -->
+  <script src="http://localhost:8000/resources/test262-harness.js"><\/script>
+
+  <!-- Test262 required libraries -->
+  <script src="http://localhost:8000/test262/harness/assert.js"><\/script>
+  <script src="http://localhost:8000/test262/harness/sta.js"><\/script>
+
+  ###INCLUDES###
+</head>
+<body>
+</body>
+<script type="text/javascript">
+`;
+let FOOTER = `
+  ;__completed__(window);
+<\/script>
+</html>
+`;
+
 function test262_as_html(test262, attrs) {
-  function escapeDoubleQuotes(str) {
-    return str.replace(/\"/g, '\\\"');
-  }
-  let header = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <title></title>
-
-      <!-- Test262 harness -->
-      <script src="http://localhost:8000/resources/test262-harness.js"><\/script>
-
-      <!-- Test262 required libraries -->
-      <script src="http://localhost:8000/test262/harness/assert.js"><\/script>
-      <script src="http://localhost:8000/test262/harness/sta.js"><\/script>
-
-      ###INCLUDES###
-    </head>
-    <body>
-    </body>
-    <script type="text/javascript">
-  `;
-  let footer = `
-      ;__completed__(window);
-    <\/script>
-    </html>
-  `;
   output = [];
-  output.push(header.replace('###INCLUDES###', addScripts(attrs.includes)));
+  output.push(HEADER.replace('###INCLUDES###', addScripts(attrs.includes)));
+  output.push(prepareTest(test262, attrs));
+  output.push(FOOTER);
+  return output.join("");
+}
+
+function addScripts(sources) {
+  sources = sources || [];
+  let ret = [];
+  let root = 'http://localhost:8000/test262/harness/'
+  sources.forEach(function(src) {
+    ret.push("<script src='###SRC###'><\/script>".replace('###SRC###', root + src));
+  });
+  return ret.join("\n");
+}
+
+function prepareTest(test262, attrs) {
+  function escapeDoubleQuotes(str) {
+      return str.replace(/\"/g, '\\\"');
+  }
+  let output = [];
   let test = test262();
   if (attrs.strict) {
     test = "'use strict';\n" + test;
@@ -120,20 +138,7 @@ function test262_as_html(test262, attrs) {
   } else {
       output.push(test);
   }
-  output.push(footer);
-  ret = output.join("");
-  console.log(ret);
-  return ret;
-}
-
-function addScripts(sources) {
-  sources = sources || [];
-  let ret = [];
-  let root = 'http://localhost:8000/test262/harness/'
-  sources.forEach(function(src) {
-    ret.push("<script src='###SRC###'><\/script>".replace('###SRC###', root + src));
-  });
-  return ret.join("\n");
+  return output.join("");
 }
 
 function __completed__(w) {
