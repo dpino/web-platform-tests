@@ -193,6 +193,30 @@ async_test(function(t) {
 }, '###TITLE###');
 '''
 
+def run_in_iframe(title):
+    output = ASYNC_TEST
+    output = re.sub('###TITLE###', 'IFrame: ' + title, output)
+    output = re.sub('###TEST_CALL###', 'run_in_iframe', output)
+    return output
+
+def run_in_iframe_strict(title):
+    output = ASYNC_TEST
+    output = re.sub('###TITLE###', 'IFrame (strict): ' + title, output)
+    output = re.sub('###TEST_CALL###', 'run_in_iframe_strict', output)
+    return output
+
+def run_in_window(title):
+    output = ASYNC_TEST
+    output = re.sub('###TITLE###', 'Window: ' + title, output)
+    output = re.sub('###TEST_CALL###', 'run_in_window', output)
+    return output
+
+def run_in_window_strict(title):
+    output = ASYNC_TEST
+    output = re.sub('###TITLE###', 'Window (strict): ' + title, output)
+    output = re.sub('###TEST_CALL###', 'run_in_window_strict', output)
+    return output
+
 def stringify(list):
     if list == None or len(list) == 0:
         return '[]'
@@ -228,18 +252,6 @@ def tojson(d):
             append("\t{key}: {value},".format(key=k, value=quote(escape(v))))
     append('}')
     return flush()
-
-def run_in_iframe(title):
-    output = ASYNC_TEST
-    output = re.sub('###TITLE###', 'IFrame: ' + title, output)
-    output = re.sub('###TEST_CALL###', 'run_in_iframe', output)
-    return output
-
-def run_in_iframe_strict(title):
-    output = ASYNC_TEST
-    output = re.sub('###TITLE###', 'IFrame (strict): ' + title, output)
-    output = re.sub('###TEST_CALL###', 'run_in_iframe_strict', output)
-    return output
 
 class WPTestBuilder(object):
 
@@ -300,12 +312,15 @@ class WPTestBuilder(object):
             flags = 'flags' in test262.attrs and test262.attrs['flags'] or []
             if 'onlyStrict' in flags:
                 ret.append(run_in_iframe_strict(title))
+                ret.append(run_in_window_strict(title))
             elif 'noStrict' in flags:
                 ret.append(run_in_iframe(title))
+                ret.append(run_in_window(title))
             else:
                 ret.append(run_in_iframe_strict(title))
-                ret.append("\n")
                 ret.append(run_in_iframe(title))
+                ret.append(run_in_window_strict(title))
+                ret.append(run_in_window(title))
             return FOOTER.replace("###TESTS###", "".join(ret))
         ret = []
         ret.append(header())
