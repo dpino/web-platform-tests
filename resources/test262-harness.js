@@ -93,13 +93,19 @@ let HEADER = `
   <script src="http://localhost:8000/test262/harness/sta.js"><\/script>
 
   ###INCLUDES###
+
+  <script type="text/javascript">
+    function __completed__() {
+      window.dispatchEvent(new CustomEvent('completed'));
+    }
+  <\/script>
 </head>
 <body>
 </body>
 <script type="text/javascript">
 `;
 let FOOTER = `
-  ;__completed__(window);
+  ;__completed__();
 <\/script>
 </html>
 `;
@@ -141,10 +147,6 @@ function prepareTest(test262, attrs) {
       output.push(test);
   }
   return output.join("");
-}
-
-function __completed__(w) {
-	w.dispatchEvent(new CustomEvent('completed'));
 }
 
 /* Popup Window */
