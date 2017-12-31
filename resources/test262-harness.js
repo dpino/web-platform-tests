@@ -37,6 +37,8 @@ function $DONE() {
 
 }
 
+/* IFrame */
+
 function run_in_iframe_strict(test262, attrs, t) {
     attrs.strict = true;
     run_in_iframe(test262, attrs, t);
@@ -143,6 +145,44 @@ function prepareTest(test262, attrs) {
 
 function __completed__(w) {
 	w.dispatchEvent(new CustomEvent('completed'));
+}
+
+/* Popup Window */
+
+function run_in_window_strict(test262, attrs, t) {
+    attrs.strict = true;
+    run_in_window(test262, attrs, t);
+}
+
+function run_in_window(test262, attrs, t) {
+  // Rethrow error from popup window.
+  window.addEventListener('message', t.step_func(function(e) {
+    if (e.data[0] == 'error') {
+      throw new Error(e.data[1]);
+    }
+  }));
+  let content = test262_as_html(test262, attrs);
+  let blob = new Blob([content], {type: 'text/html'});
+  let page = URL.createObjectURL(blob);
+  let popup = window.open(page, 'popup');
+  // Finish test on completed event.
+  popup.addEventListener('completed', t.step_func(function(e) {
+    popup.close();
+    t.done();
+  }));
+  // In case of error send it to parent window.
+  popup.addEventListener('error', function(e) {
+    e.preventDefault();
+    // If the test failed due to a SyntaxError but phase was 'early', then the
+    // test should actually pass.
+    if (e.message.startsWith("SyntaxError")) {
+        if (attrs.type == 'SyntaxError' && attrs.phase == 'early') {
+            t.done();
+            return;
+        }
+    }
+    popup.top.postMessage(['error', e.message], '*');
+  });
 }
 
 installAPI(window);
