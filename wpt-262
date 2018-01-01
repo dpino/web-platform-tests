@@ -11,6 +11,8 @@ import threading
 from random import randint
 from stat import *
 
+TAB_SPACE = 2
+
 OPTIONS = {
     "generate": [0, 1]      # Generate WPT tests. Accepts zero or one arguments.
 }
@@ -156,8 +158,12 @@ class Test262Parser(object):
 
 ###
 
+def trim(text):
+    lines = text.split("\n")
+    return "\n".join(lines[1:len(lines)-1])
+
 # TODO: Put everything into one single template.
-HEADER = '''
+HEADER = trim('''
 <!DOCTYPE html>
 <html>
   <head>
@@ -175,23 +181,23 @@ HEADER = '''
   </body>
   <script type="text/javascript">
 ###HEADER###
-    let attrs = ###ATTRS###;
+###ATTRS###
     function test262() {
-'''
-FOOTER = '''
+''')
+FOOTER = trim('''
     }
     window.addEventListener('load', function(e) {
-      ###TESTS###
+###TESTS###
     });
   </script>
 </html>
-'''
+''')
 
-ASYNC_TEST = '''
+ASYNC_TEST = trim('''
 async_test(function(t) {
   ###TEST_CALL###(test262, attrs, t);
 }, '###TITLE###');
-'''
+''')
 
 def run_in_iframe(title):
     output = ASYNC_TEST
@@ -253,6 +259,18 @@ def tojson(d):
     append('}')
     return flush()
 
+def indent(num_tabs, content):
+    def dup(char, times):
+        ret = []
+        for i in range(0, times):
+            ret.append(char)
+        return "".join(ret)
+    ret = []
+    space = dup(" ", num_tabs * TAB_SPACE)
+    for line in content.split("\n"):
+        ret.append(space + line)
+    return "\n".join(ret)
+
 class WPTestBuilder(object):
 
     def __init__(self, path):
@@ -287,8 +305,8 @@ class WPTestBuilder(object):
         def header():
             ret = HEADER
             ret = re.sub('###TITLE###', title, ret)
-            ret = ret.replace('###ATTRS###', tojson(test262.attrs))
-            ret = ret.replace('###HEADER###', test262.header)
+            ret = ret.replace('###ATTRS###', indent(2, "let attrs = %s;" % tojson(test262.attrs)))
+            ret = ret.replace('###HEADER###', indent(2, test262.header))
             return ret
         def body():
             def escape(text):
@@ -304,7 +322,7 @@ class WPTestBuilder(object):
                     if len(line) > 0:
                         output.append(quote(line))
                 return " + \n".join(output)
-            return "return " + format(escape(test262.body)) + ";"
+            return indent(4, "return \"\" +\n%s;" % format(escape(test262.body)))
         def footer():
             # By default tests are run in strict and non-strict modes,
             # unless flags says otherwise.
@@ -321,7 +339,7 @@ class WPTestBuilder(object):
                 ret.append(run_in_iframe(title))
                 ret.append(run_in_window_strict(title))
                 ret.append(run_in_window(title))
-            return FOOTER.replace("###TESTS###", "".join(ret))
+            return FOOTER.replace("###TESTS###", indent(3, "\n".join(ret)))
         ret = []
         ret.append(header())
         ret.append(body())
