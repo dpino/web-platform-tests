@@ -232,8 +232,9 @@ def stringify(list):
         ret.append(elem)
     return '[%s]' % ",".join(ret)
 
-def tojson(d):
+def tojson(d, opts):
     ret = []
+    exclude = opts['exclude'] or []
     def append(string):
         ret.append(string)
     def flush():
@@ -252,6 +253,8 @@ def tojson(d):
         return re.sub(r"'", r"\'", v)
     append('{')
     for k, v in d.iteritems():
+        if k in exclude:
+            continue
         if isinstance(v, list):
             append("\t{key}: {value},".format(key=k, value=stringify(v)))
         else:
@@ -303,9 +306,10 @@ class WPTestBuilder(object):
     def build(self, title, content):
         test262 = Test262Parser(content)
         def header():
+            opts = { 'exclude': ['description', 'info', 'esid', 'es6id'] }
             ret = HEADER
             ret = re.sub('###TITLE###', title, ret)
-            ret = ret.replace('###ATTRS###', indent(2, "let attrs = %s;" % tojson(test262.attrs)))
+            ret = ret.replace('###ATTRS###', indent(2, "let attrs = %s;" % tojson(test262.attrs, opts)))
             ret = ret.replace('###HEADER###', indent(2, test262.header))
             return ret
         def body():
