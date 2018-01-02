@@ -40,11 +40,13 @@ function $DONE() {
 /* IFrame */
 
 function run_in_iframe_strict(test262, attrs, t) {
-    attrs.strict = true;
-    run_in_iframe(test262, attrs, t);
+    let opts = {}
+    opts.strict = true;
+    run_in_iframe(test262, attrs, t, opts);
 }
 
-function run_in_iframe(test262, attrs, t) {
+function run_in_iframe(test262, attrs, t, opts) {
+  opts = opts || {};
   // Rethrow error from iframe.
   window.addEventListener('message', t.step_func(function(e) {
     if (e.data[0] == 'error') {
@@ -53,7 +55,7 @@ function run_in_iframe(test262, attrs, t) {
   }));
   let iframe = document.createElement('iframe');
   iframe.style = 'display: none';
-  content = test262_as_html(test262, attrs);
+  content = test262_as_html(test262, attrs, opts.strict);
   let blob = new Blob([content], {type: 'text/html'});
   iframe.src = URL.createObjectURL(blob);
   document.body.appendChild(iframe);
@@ -64,7 +66,7 @@ function run_in_iframe(test262, attrs, t) {
     t.done();
   }));
   // If test failed, rethrow error.
-  let FAILED = 'iframe-failed' + attrs.strict ? 'strict' : '';
+  let FAILED = 'iframe-failed' + opts.strict ? 'strict' : '';
   window.addEventListener(FAILED, t.step_func(function(e) {
     t.set_status(t.FAIL);
     throw new Error(e.detail);
@@ -116,10 +118,10 @@ let FOOTER = `
 </html>
 `;
 
-function test262_as_html(test262, attrs) {
+function test262_as_html(test262, attrs, strict) {
   output = [];
   output.push(HEADER.replace('###INCLUDES###', addScripts(attrs.includes)));
-  output.push(prepareTest(test262, attrs));
+  output.push(prepareTest(test262, attrs, strict));
   output.push(FOOTER);
   return output.join("");
 }
@@ -134,13 +136,13 @@ function addScripts(sources) {
   return ret.join("\n");
 }
 
-function prepareTest(test262, attrs) {
+function prepareTest(test262, attrs, strict) {
   function escapeDoubleQuotes(str) {
       return str.replace(/\"/g, '\\\"');
   }
   let output = [];
   let test = test262();
-  if (attrs.strict) {
+  if (strict) {
     test = "'use strict';\n" + test;
   }
   if (attrs.type == 'SyntaxError') {
@@ -158,12 +160,14 @@ function prepareTest(test262, attrs) {
 /* Popup Window */
 
 function run_in_window_strict(test262, attrs, t) {
-    attrs.strict = true;
-    run_in_window(test262, attrs, t);
+    let opts = {}
+    opts.strict = true;
+    run_in_window(test262, attrs, t, opts);
 }
 
-function run_in_window(test262, attrs, t) {
-  let content = test262_as_html(test262, attrs);
+function run_in_window(test262, attrs, t, opts) {
+  opts = opts || {};
+  let content = test262_as_html(test262, attrs, opts.strict);
   let blob = new Blob([content], {type: 'text/html'});
   let page = URL.createObjectURL(blob);
   let popup = window.open(page, 'popup');
@@ -173,7 +177,7 @@ function run_in_window(test262, attrs, t) {
     t.done();
   }));
   // If test failed, rethrow error.
-  let FAILED = 'popup-failed' + attrs.strict ? 'strict' : '';
+  let FAILED = 'popup-failed' + opts.strict ? 'strict' : '';
   window.addEventListener(FAILED, t.step_func(function(e) {
 	popup.close();
 	t.set_status(t.FAIL);
@@ -213,7 +217,7 @@ function workerNameByType(type, strict) {
 	return type.toLowerCase() + (strict ? "strict" : "");
 }
 
-function createWorkerFromString(test262, attrs) {
+function createWorkerFromString(test262, attrs, opts) {
   function importScripts(sources) {
 	sources = sources || [];
     let ret = [];
@@ -246,7 +250,7 @@ function createWorkerFromString(test262, attrs) {
     }
     throw new Error('unreachable');
   }
-  let type = attrs['worker_type'] || 'Worker';
+  let type = opts.worker_type || 'Worker';
   let template = getWorkerTemplate(type);
   template = template.replace('###INCLUDES###', importScripts(attrs.includes));
   template = template.replace('###NAME###', workerNameByType(type));
@@ -255,12 +259,14 @@ function createWorkerFromString(test262, attrs) {
 }
 
 function run_in_worker_strict(test262, attrs, t) {
-    attrs.strict = true;
-    run_in_worker(test262, attrs, t);
+    let opts = {}
+    opts.strict = true;
+    run_in_worker(test262, attrs, t, opts);
 }
 
-function run_in_worker(test262, attrs, t) {
-  let worker = createWorkerFromString(test262, attrs);
+function run_in_worker(test262, attrs, t, opts) {
+  opts = opts || {};
+  let worker = createWorkerFromString(test262, attrs, opts);
   let worker_name = workerNameByType('Worker');
   worker.addEventListener('message', t.step_func(function(e) {
     let [message, name] = e.data;
@@ -269,7 +275,7 @@ function run_in_worker(test262, attrs, t) {
     }
   }));
   // If test failed, rethrow error.
-  let FAILED = 'worker-failed' + attrs.strict ? 'strict' : '';
+  let FAILED = 'worker-failed' + opts.strict ? 'strict' : '';
   window.addEventListener(FAILED, t.step_func(function(e) {
     t.set_status(t.FAIL);
     throw new Error(e.detail);
