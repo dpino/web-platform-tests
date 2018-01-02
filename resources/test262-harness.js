@@ -63,6 +63,12 @@ function run_in_iframe(test262, attrs, t) {
   w.addEventListener('completed', t.step_func(function(e) {
     t.done();
   }));
+  // If test failed, rethrow error.
+  let FAILED = 'iframe-failed' + attrs.strict ? 'strict' : '';
+  window.addEventListener(FAILED, t.step_func(function(e) {
+    t.set_status(t.FAIL);
+    throw new Error(e.detail);
+  }));
   // In case of error send it to parent window.
   w.addEventListener('error', function(e) { 
     e.preventDefault();
@@ -74,7 +80,7 @@ function run_in_iframe(test262, attrs, t) {
             return;
         }
     }
-    w.top.postMessage(['error', e.message], '*');
+    top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
   });
 }
 
@@ -157,12 +163,6 @@ function run_in_window_strict(test262, attrs, t) {
 }
 
 function run_in_window(test262, attrs, t) {
-  // Rethrow error from popup window.
-  window.addEventListener('message', t.step_func(function(e) {
-    if (e.data[0] == 'error') {
-      throw new Error(e.data[1]);
-    }
-  }));
   let content = test262_as_html(test262, attrs);
   let blob = new Blob([content], {type: 'text/html'});
   let page = URL.createObjectURL(blob);
@@ -171,6 +171,13 @@ function run_in_window(test262, attrs, t) {
   popup.addEventListener('completed', t.step_func(function(e) {
     popup.close();
     t.done();
+  }));
+  // If test failed, rethrow error.
+  let FAILED = 'popup-failed' + attrs.strict ? 'strict' : '';
+  window.addEventListener(FAILED, t.step_func(function(e) {
+	popup.close();
+	t.set_status(t.FAIL);
+    throw new Error(e.detail);
   }));
   // In case of error send it to parent window.
   popup.addEventListener('error', function(e) {
@@ -183,7 +190,7 @@ function run_in_window(test262, attrs, t) {
             return;
         }
     }
-    popup.top.postMessage(['error', e.message], '*');
+	top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
   });
 }
 
@@ -193,7 +200,7 @@ let WORKER_TEMPLATE = `
   ###INCLUDES###
 
   function __completed__() {
-    postMessage(['completed']);
+    postMessage(['completed', '###NAME###']);
   }
 
   onmessage = function(e) {
@@ -201,6 +208,10 @@ let WORKER_TEMPLATE = `
     __completed__();
   }
 `;
+
+function workerNameByType(type, strict) {
+	return type.toLowerCase() + (strict ? "strict" : "");
+}
 
 function createWorkerFromString(test262, attrs) {
   function importScripts(sources) {
@@ -238,10 +249,10 @@ function createWorkerFromString(test262, attrs) {
   let type = attrs['worker_type'] || 'Worker';
   let template = getWorkerTemplate(type);
   template = template.replace('###INCLUDES###', importScripts(attrs.includes));
+  template = template.replace('###NAME###', workerNameByType(type));
   template = template.replace('###BODY###', prepareTest(test262, attrs));
   return createWorker(type, template);
 }
-
 
 function run_in_worker_strict(test262, attrs, t) {
     attrs.strict = true;
@@ -249,34 +260,34 @@ function run_in_worker_strict(test262, attrs, t) {
 }
 
 function run_in_worker(test262, attrs, t) {
-	let worker = createWorkerFromString(test262, attrs);
-	worker.addEventListener('message', t.step_func(function(e) {
-		let message = e.data[0];
-		if (message == 'completed') {
-			t.done();
-		}
-	}));
-	// In case of error send it back to sender.
-	worker.addEventListener('error', function(e) {
-		e.preventDefault();
-		// If the test failed due to a SyntaxError but phase was 'early', then the
-		// test should actually pass.
-		if (e.message.startsWith("SyntaxError")) {
-			if (attrs.type == 'SyntaxError' && attrs.phase == 'early') {
-				t.done();
-				return;
-			}
-		}
-		postMessage(['error', e.message], '*');
-	});
-	window.addEventListener('message', t.step_func(function(e) {
-		let type = e.data[0];
-		if (type == 'error') {
-            t.set_status(t.FAIL);
-			throw new Error(e.data[1]);
-		}
-	}));
-	worker.postMessage([]);
+  let worker = createWorkerFromString(test262, attrs);
+  let worker_name = workerNameByType('Worker');
+  worker.addEventListener('message', t.step_func(function(e) {
+    let [message, name] = e.data;
+    if (message == 'completed' && name == worker_name) {
+      t.done();
+    }
+  }));
+  // If test failed, rethrow error.
+  let FAILED = 'worker-failed' + attrs.strict ? 'strict' : '';
+  window.addEventListener(FAILED, t.step_func(function(e) {
+    t.set_status(t.FAIL);
+    throw new Error(e.detail);
+  }));
+  // In case of error send it back to sender.
+  worker.addEventListener('error', function(e) {
+    e.preventDefault();
+    // If the test failed due to a SyntaxError but phase was 'early', then the
+    // test should actually pass.
+    if (e.message.startsWith("SyntaxError")) {
+      if (attrs.type == 'SyntaxError' && attrs.phase == 'early') {
+        t.done();
+        return;
+      }
+    }
+	top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
+  });
+  worker.postMessage([]);
 }
 
 installAPI(window);
