@@ -225,13 +225,13 @@ def run_in_window_strict(title):
 
 def run_in_worker(title):
     output = ASYNC_TEST
-    output = re.sub('###TITLE###', 'worker: ' + title, output)
+    output = re.sub('###TITLE###', 'Worker: ' + title, output)
     output = re.sub('###TEST_CALL###', 'run_in_worker', output)
     return output
 
 def run_in_worker_strict(title):
     output = ASYNC_TEST
-    output = re.sub('###TITLE###', 'worker (strict): ' + title, output)
+    output = re.sub('###TITLE###', 'Worker (strict): ' + title, output)
     output = re.sub('###TEST_CALL###', 'run_in_worker_strict', output)
     return output
 
