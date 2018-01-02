@@ -179,8 +179,8 @@ function run_in_window(test262, attrs, t, opts) {
   // If test failed, rethrow error.
   let FAILED = 'popup-failed' + opts.strict ? 'strict' : '';
   window.addEventListener(FAILED, t.step_func(function(e) {
-	popup.close();
-	t.set_status(t.FAIL);
+    popup.close();
+    t.set_status(t.FAIL);
     throw new Error(e.detail);
   }));
   // In case of error send it to parent window.
@@ -194,7 +194,7 @@ function run_in_window(test262, attrs, t, opts) {
             return;
         }
     }
-	top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
+    top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
   });
 }
 
@@ -214,12 +214,13 @@ let WORKER_TEMPLATE = `
 `;
 
 function workerNameByType(type, strict) {
-	return type.toLowerCase() + (strict ? "strict" : "");
+    strict = strict || false;
+    return type.toLowerCase() + (strict ? "strict" : "");
 }
 
 function createWorkerFromString(test262, attrs, opts) {
   function importScripts(sources) {
-	sources = sources || [];
+    sources = sources || [];
     let ret = [];
     let master = ['assert.js', 'sta.js'];  // Must always be included.
     let root = 'http://localhost:8000/test262/harness/'
@@ -253,7 +254,7 @@ function createWorkerFromString(test262, attrs, opts) {
   let type = opts.worker_type || 'Worker';
   let template = getWorkerTemplate(type);
   template = template.replace('###INCLUDES###', importScripts(attrs.includes));
-  template = template.replace('###NAME###', workerNameByType(type));
+  template = template.replace('###NAME###', workerNameByType(type, opts.strict));
   template = template.replace('###BODY###', prepareTest(test262, attrs));
   return createWorker(type, template);
 }
@@ -267,7 +268,7 @@ function run_in_worker_strict(test262, attrs, t) {
 function run_in_worker(test262, attrs, t, opts) {
   opts = opts || {};
   let worker = createWorkerFromString(test262, attrs, opts);
-  let worker_name = workerNameByType('Worker');
+  let worker_name = workerNameByType('Worker', opts.strict);
   worker.addEventListener('message', t.step_func(function(e) {
     let [message, name] = e.data;
     if (message == 'completed' && name == worker_name) {
@@ -291,9 +292,75 @@ function run_in_worker(test262, attrs, t, opts) {
         return;
       }
     }
-	top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
+    top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
   });
   worker.postMessage([]);
+}
+
+/* SharedWorker */
+
+let SHARED_WORKER_TEMPLATE = `
+  ###INCLUDES###
+
+  onconnect = function(e) {
+
+    let port = e.ports[0];
+
+    function __completed__() {
+      port.postMessage(['completed', '###NAME###']);
+    }
+
+    port.addEventListener('message', function(e) {
+      ###BODY###
+      __completed__();
+    });
+
+    port.start();
+  }
+`;
+
+function run_in_shared_worker_strict(test262, attrs, t) {
+    let opts = {}
+    opts.strict = true;
+    run_in_shared_worker(test262, attrs, t, opts);
+}
+
+function run_in_shared_worker(test262, attrs, t, opts) {
+  opts = opts || {};
+  let worker = createSharedWorkerFromString(test262, attrs, opts);
+  let worker_name = workerNameByType('SharedWorker', opts.strict);
+  worker.port.addEventListener('message', t.step_func(function(e) {
+    let [message, name] = e.data;
+    if (message == 'completed' && name == worker_name) {
+      t.done();
+    }
+  }));
+  // If test failed, rethrow error.
+  let FAILED = 'shared-worker-failed' + opts.strict ? 'strict' : '';
+  window.addEventListener(FAILED, t.step_func(function(e) {
+    t.set_status(t.FAIL);
+    throw new Error(e.detail);
+  }));
+  // In case of error send it back to sender.
+  worker.port.addEventListener('error', function(e) {
+    e.preventDefault();
+    // If the test failed due to a SyntaxError but phase was 'early', then the
+    // test should actually pass.
+    if (e.message.startsWith("SyntaxError")) {
+      if (attrs.type == 'SyntaxError' && attrs.phase == 'early') {
+        t.done();
+        return;
+      }
+    }
+    top.dispatchEvent(new CustomEvent(FAILED, {detail: e.message}));
+  });
+  worker.port.start();
+  worker.port.postMessage([]);
+}
+
+function createSharedWorkerFromString(test262, attrs, opts) {
+    opts.worker_type = 'SharedWorker';
+    return createWorkerFromString(test262, attrs, opts);
 }
 
 installAPI(window);
