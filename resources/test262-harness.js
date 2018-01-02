@@ -187,4 +187,96 @@ function run_in_window(test262, attrs, t) {
   });
 }
 
+/* Worker */
+
+let WORKER_TEMPLATE = `
+  ###INCLUDES###
+
+  function __completed__() {
+    postMessage(['completed']);
+  }
+
+  onmessage = function(e) {
+    ###BODY###
+    __completed__();
+  }
+`;
+
+function createWorkerFromString(test262, attrs) {
+  function importScripts(sources) {
+	sources = sources || [];
+    let ret = [];
+    let master = ['assert.js', 'sta.js'];  // Must always be included.
+    let root = 'http://localhost:8000/test262/harness/'
+    master.forEach(function(src) {
+      ret.push('"' + root + src + '"');
+    });
+    sources.forEach(function(src) {
+      ret.push('"' + root + src + '"');
+    });
+    return "importScripts(" + ret.join(",") + ");";
+  }
+  function createWorker(type, code) {
+    let blob = new Blob([code], {type: 'text/javascript'});
+    if (type == 'Worker') {
+      return new Worker(URL.createObjectURL(blob));
+    }
+    if (type == 'SharedWorker') {
+      return new SharedWorker(URL.createObjectURL(blob));
+    }
+    throw new Error('unreachable');
+  }
+  function getWorkerTemplate(type) {
+    if (type == 'Worker') {
+      return WORKER_TEMPLATE;
+    }
+    if (type == 'SharedWorker') {
+      return SHARED_WORKER_TEMPLATE;
+    }
+    throw new Error('unreachable');
+  }
+  let type = attrs['worker_type'] || 'Worker';
+  let template = getWorkerTemplate(type);
+  template = template.replace('###INCLUDES###', importScripts(attrs.includes));
+  template = template.replace('###BODY###', prepareTest(test262, attrs));
+  return createWorker(type, template);
+}
+
+
+function run_in_worker_strict(test262, attrs, t) {
+    attrs.strict = true;
+    run_in_worker(test262, attrs, t);
+}
+
+function run_in_worker(test262, attrs, t) {
+	let worker = createWorkerFromString(test262, attrs);
+	worker.addEventListener('message', t.step_func(function(e) {
+		let message = e.data[0];
+		if (message == 'completed') {
+			t.done();
+		}
+	}));
+	// In case of error send it back to sender.
+	worker.addEventListener('error', function(e) {
+		e.preventDefault();
+		// If the test failed due to a SyntaxError but phase was 'early', then the
+		// test should actually pass.
+		if (e.message.startsWith("SyntaxError")) {
+			if (attrs.type == 'SyntaxError' && attrs.phase == 'early') {
+				t.done();
+				return;
+			}
+		}
+		postMessage(['error', e.message], '*');
+	});
+	window.addEventListener('message', t.step_func(function(e) {
+		let type = e.data[0];
+		if (type == 'error') {
+            t.set_status(t.FAIL);
+			throw new Error(e.data[1]);
+		}
+	}));
+	worker.postMessage([]);
+}
+
 installAPI(window);
