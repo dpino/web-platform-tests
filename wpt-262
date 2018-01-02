@@ -235,6 +235,18 @@ def run_in_worker_strict(title):
     output = re.sub('###TEST_CALL###', 'run_in_worker_strict', output)
     return output
 
+def run_in_shared_worker(title):
+    output = ASYNC_TEST
+    output = re.sub('###TITLE###', 'SharedWorker: ' + title, output)
+    output = re.sub('###TEST_CALL###', 'run_in_shared_worker', output)
+    return output
+
+def run_in_shared_worker_strict(title):
+    output = ASYNC_TEST
+    output = re.sub('###TITLE###', 'SharedWorker (strict): ' + title, output)
+    output = re.sub('###TEST_CALL###', 'run_in_shared_worker_strict', output)
+    return output
+
 def stringify(list):
     if list == None or len(list) == 0:
         return '[]'
@@ -348,10 +360,12 @@ class WPTestBuilder(object):
                 ret.append(run_in_iframe_strict(title))
                 ret.append(run_in_window_strict(title))
                 ret.append(run_in_worker_strict(title))
+                ret.append(run_in_shared_worker_strict(title))
             elif 'noStrict' in flags:
                 ret.append(run_in_iframe(title))
                 ret.append(run_in_window(title))
                 ret.append(run_in_worker(title))
+                ret.append(run_in_shared_worker(title))
             else:
                 ret.append(run_in_iframe_strict(title))
                 ret.append(run_in_iframe(title))
@@ -359,6 +373,8 @@ class WPTestBuilder(object):
                 ret.append(run_in_window(title))
                 ret.append(run_in_worker_strict(title))
                 ret.append(run_in_worker(title))
+                ret.append(run_in_shared_worker_strict(title))
+                ret.append(run_in_shared_worker(title))
             return FOOTER.replace("###TESTS###", indent(3, "\n".join(ret)))
         ret = []
         ret.append(header())
