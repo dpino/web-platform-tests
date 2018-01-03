@@ -258,7 +258,7 @@ function createWorkerFromString(test262, attrs, opts) {
   let template = getWorkerTemplate(type);
   template = template.replace('###INCLUDES###', importScripts(attrs.includes));
   template = template.replace('###NAME###', workerNameByType(type, opts.strict));
-  template = template.replace('###BODY###', prepareTest(test262, attrs));
+  template = template.replace('###BODY###', prepareTest(test262, attrs, opts.strict));
   return createWorker(type, template);
 }
 
