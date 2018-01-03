@@ -137,8 +137,11 @@ function addScripts(sources) {
 }
 
 function prepareTest(test262, attrs, strict) {
-  function escapeDoubleQuotes(str) {
-      return str.replace(/\"/g, '\\\"');
+  function escapeEvalExpr(str) {
+      // Escape double quotes.
+      let ret = str.replace(/\"/g, '\\\"');
+      // Remove backreturn characters.
+      return ret.replace(/\n/g, '');
   }
   let output = [];
   let test = test262();
@@ -149,8 +152,8 @@ function prepareTest(test262, attrs, strict) {
       // If phase is 'runtime' the error will be caught here. If phase is 'early' the
       // error will be handled at the window.onerror event.
       output.push('try { eval("');
-      output.push(escapeDoubleQuotes(test));
-      output.push('"); } catch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
+      output.push(escapeEvalExpr(test));
+      output.push('"); }\ncatch (e) { assert.sameValue(e instanceof SyntaxError, true); }');
   } else {
       output.push(test);
   }
