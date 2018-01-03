@@ -345,7 +345,7 @@ function run_in_shared_worker(test262, attrs, t, opts) {
     throw new Error(e.detail);
   }));
   // In case of error send it back to sender.
-  worker.port.addEventListener('error', function(e) {
+  worker.addEventListener('error', function(e) {
     e.preventDefault();
     // If the test failed due to a SyntaxError but phase was 'early', then the
     // test should actually pass.
