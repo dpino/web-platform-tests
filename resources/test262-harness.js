@@ -148,7 +148,7 @@ function prepareTest(test262, attrs, strict) {
   if (strict) {
     test = "'use strict';\n" + test;
   }
-  if (attrs.type == 'SyntaxError') {
+  if (attrs.type == 'SyntaxError' && attrs.phase == 'runtime') {
       // If phase is 'runtime' the error will be caught here. If phase is 'early' the
       // error will be handled at the window.onerror event.
       output.push('try { eval("');
@@ -193,6 +193,7 @@ function run_in_window(test262, attrs, t, opts) {
     // test should actually pass.
     if (e.message.startsWith("SyntaxError")) {
         if (attrs.type == 'SyntaxError' && attrs.phase == 'early') {
+            popup.close();
             t.done();
             return;
         }
