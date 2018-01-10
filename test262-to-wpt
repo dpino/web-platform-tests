@@ -19,7 +19,7 @@ non-strict mode, unless the target test indicates otherwise.
 '''
 
 TAB_WIDTH = 2
-DEST_PATH = 'js'
+DEST_PATH = 'js/test262'
 
 def trim(text):
     lines = text.split("\n")
@@ -277,22 +277,43 @@ class WPTestBuilder(object):
 
     def generate(self):
         path = self.path
-        mode = os.stat(path)[ST_MODE]
+        mode = os.stat(self.path)[ST_MODE]
         if S_ISDIR(mode):
-            print "Generating web-platform-test wrapper for test262"
-            for each in self.listall(path, {'ext': 'js', 'skip_hidden': True}):
+            # Check root folder contains 'test'.
+            test_dir = os.path.join(path, "test")
+            mode = os.stat(test_dir)[ST_MODE]
+            if not S_ISDIR(mode):
+                print("Could not locate 'test' folder at %s" % path)
+                exit(1)
+            print "Generating web-platform-test wrappers for test262"
+            for each in self.listall(test_dir, {'ext': 'js', 'skip_hidden': True}):
                 self.generate_single_wpt(each)
-            print "Output: " + DEST_PATH + "/%s" % path
+            print "Output: " + DEST_PATH
         elif S_ISREG(mode):
-            print "Generating web-platform-tests wrappers for {0}".format(path)
-            dst = self.generate_single_wpt(path)
-            print "Output: %s" % dst
+            pos = path.find("test262/test")
+            if pos < 0:
+                print("Not a test262 file: '%'" % path)
+                exit(1)
+            print "Generating web-platform-tests wrapper for {0}".format(path)
+            print "Output: %s" % self.generate_single_wpt(path)
         else:
             print "Skipping %s" % path
 
-    def generate_single_wpt(self, path):
-        output = self.ensure_destination_path(path)
-        return self.savefile(output, self.build(output, self.readfile(path)))
+    def destination_path(self, path):
+        filename = re.sub(".*?test262/test", "", path)
+        filename = re.sub('.js$', '.html', filename)
+        return DEST_PATH + filename
+
+    def generate_single_wpt(self, src):
+        dst = self.destination_path(src)
+        self.ensure_destination_path(dst)
+        return self.savefile(dst, self.build(dst, self.readfile(src)))
+
+    def ensure_destination_path(self, path):
+        dirname = subprocess.check_output(("dirname {0}".format(path)).split())
+        dirname = re.sub('\n', '', dirname)
+        process = subprocess.Popen(("mkdir -p {0}".format(dirname)).split())
+        process.wait() 
 
     def savefile(self, output, content):
         with open(output, 'wt') as fd:
@@ -360,32 +381,18 @@ class WPTestBuilder(object):
             # Remove carriage return if any.
             return re.sub("\x0D", "", content)
 
-    def ensure_destination_path(self, path):
-        dirname = subprocess.check_output(("dirname {0}".format(path)).split())
-        dirname = re.sub('\n', '', dirname)
-        process = subprocess.Popen(("mkdir -p {0}/{1}".format(DEST_PATH, dirname)).split())
-        process.wait() 
-        return DEST_PATH + '/' + re.sub('.js$', '.html', path)
-
     def listall(self, root, opts):
         opts = opts or {}
-        result = []
-        def ls(path):
-            return os.listdir(path)
-        def lsr(path):
-            if not os.path.isdir(path):
-                if not opts['ext'] or path.endswith(opts.ext):
-                    result.append(path)
-            for f in ls(path):
-                if opts['skip_hidden'] and f.startswith('.'):
+        ret = []
+        ext = opts['ext']
+        skip_hidden = opts['skip_hidden']
+        for root, dirs, files in os.walk(root):
+            for filename in files:
+                if skip_hidden and filename.startswith('.'):
                     continue
-                filename = os.path.join(path, f)
-                if os.path.isdir(filename):
-                    lsr(filename)
-                else:
-                    result.append(filename)
-        lsr(root)
-        return result
+                if ext and filename.endswith(ext):
+                    ret.append(os.path.join(root, filename))
+        return ret
 
 def main():
     if len(sys.argv) < 2:
