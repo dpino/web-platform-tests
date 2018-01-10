@@ -67,8 +67,8 @@ let HEADER = `
   <script src="http://localhost:8000/resources/test262-harness.js"><\/script>
 
   <!-- Test262 required libraries -->
-  <script src="http://localhost:8000/test262/harness/assert.js"><\/script>
-  <script src="http://localhost:8000/test262/harness/sta.js"><\/script>
+  <script src="http://localhost:8000/resources/test262/harness/assert.js"><\/script>
+  <script src="http://localhost:8000/resources/test262/harness/sta.js"><\/script>
 
   ###INCLUDES###
 
@@ -99,7 +99,7 @@ function test262_as_html(test262, attrs, strict) {
 function addScripts(sources) {
   sources = sources || [];
   let ret = [];
-  let root = 'http://localhost:8000/test262/harness/'
+  let root = 'http://localhost:8000/resources/test262/harness/'
   sources.forEach(function(src) {
     ret.push("<script src='###SRC###'><\/script>".replace('###SRC###', root + src));
   });
@@ -195,7 +195,7 @@ function createWorkerFromString(test262, attrs, opts) {
     sources = sources || [];
     let ret = [];
     let master = ['assert.js', 'sta.js'];  // Must always be included.
-    let root = 'http://localhost:8000/test262/harness/'
+    let root = 'http://localhost:8000/resources/test262/harness/'
     master.forEach(function(src) {
       ret.push('"' + root + src + '"');
     });
